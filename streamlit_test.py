@@ -49,32 +49,32 @@ if button_pressed:
     if image_uploaded:
         calculating_display.text("Getting Words...")
 
-        try:
+        #try:
             # Run image through boggleSolver to get board letters
-            bs = boggleSolver(model,showImages=False,verbose=False)
-            im = np.array(img)
-            im = im[:, :, ::-1].copy() # rgb to bgr
-            output_im,letters_out = bs.process_image(im)
+        bs = boggleSolver(model,showImages=False,verbose=False)
+        im = np.array(img)
+        im = im[:, :, ::-1].copy() # rgb to bgr
+        output_im,letters_out = bs.process_image(im)
 
-            # Set output image display
-            cv2.imwrite('output_im.png',output_im)
-            out_im = Image.open('output_im.png')
-            imageLocation.image(out_im)
+        # Set output image display
+        cv2.imwrite('output_im.png',output_im)
+        out_im = Image.open('output_im.png')
+        imageLocation.image(out_im)
 
-            # Run boggle board solver and sort words longest to shortest
-            found_words = solve_board(letters_out, dictionary)
-            found_words = sorted(found_words,key=len,reverse=True)
+        # Run boggle board solver and sort words longest to shortest
+        found_words = solve_board(letters_out, dictionary)
+        found_words = sorted(found_words,key=len,reverse=True)
 
-            # Display found words in table
-            df = pd.DataFrame(found_words)
-            df.columns = ['WORDS']
-            df.index += 1
-            st.table(df)
+        # Display found words in table
+        df = pd.DataFrame(found_words)
+        df.columns = ['WORDS']
+        df.index += 1
+        st.table(df)
 
-            # Update display message
-            calculating_display.text("Done!")
-        except:
-            calculating_display.text("Error Getting Words")
-            imageLocation = st.empty()
+        # Update display message
+        calculating_display.text("Done!")
+        #except:
+        #    calculating_display.text("Error Getting Words")
+        #    imageLocation = st.empty()
     else:
         st.write('No Image Uploaded!')	
