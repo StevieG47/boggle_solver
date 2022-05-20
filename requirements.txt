@@ -2,5 +2,5 @@ streamlit
 numpy
 opencv-python-headless
 Pillow
-tensorflow
+tensorflow==2.5.0
 pandas
