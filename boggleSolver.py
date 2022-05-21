@@ -40,6 +40,7 @@ class boggleSolver:
         # Convert to binary
         im     = cv2.threshold(im,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
         imBlur = cv2.threshold(imBlur,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        imBlur = cv2.bitwise_not(imBlur)
         #print(self.showImages)
         if self.showImages:
             imshow(im, 'binary image')
@@ -194,10 +195,12 @@ class boggleSolver:
        if len(keypoints) < 10:
             params = cv2.SimpleBlobDetector_Params()
             params.filterByInertia     = False # Want low inertia?
-            params.filterByConvexity   = False  # This works really well on the boggle tiles
+            params.filterByConvexity   = True  # This works really well on the boggle tiles
             params.filterByCircularity = False
             params.filterByColor       = False # why doesn't this work
-            params.filterByArea        = False 
+            params.filterByArea        = True
+            params.minArea = 600
+            params.minConvexity = 0.3
             detector = cv2.SimpleBlobDetector_create(params)
             keypoints = detector.detect(im_pad)
             if self.verbose:
