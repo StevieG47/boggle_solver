@@ -29,6 +29,13 @@ class boggleSolver:
         # Blur 
         imBlur = cv2.GaussianBlur(imBlur,(5,5),0)
 
+        # Threshold non-white values
+        mask_rgb = cv2.inRange(imBlur, (100,100,100), (255,255,255))
+        mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_GRAY2BGR)
+        imBlur = imBlur & mask_rgb
+        if self.showImages:
+            imshow(imBlur,'Thresholded Im')
+
         # Convert to grayscale if it's color
         try:
             if im.shape[2] > 1:
@@ -40,7 +47,7 @@ class boggleSolver:
         # Convert to binary
         im     = cv2.threshold(im,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
         imBlur = cv2.threshold(imBlur,0,255,cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-        imBlur = cv2.bitwise_not(imBlur)
+        #imBlur = cv2.bitwise_not(imBlur)
         #print(self.showImages)
         if self.showImages:
             imshow(im, 'binary image')
@@ -50,59 +57,116 @@ class boggleSolver:
         im = imBlur
 
         # Add Padding
-        m,n = im.shape
-        im_left  = np.zeros((m+1,1))                  # padding to the left
-        im_right = np.bmat([[np.zeros((1,n))],[im]])  # padding on top
-        im_pad   = np.bmat([[im_left,im_right]])
-        im_pad   = im_pad.astype(np.uint8)
+        # m,n = im.shape
+        # im_left  = np.zeros((m+1,1))                  # padding to the left
+        # im_right = np.bmat([[np.zeros((1,n))],[im]])  # padding on top
+        # im_pad   = np.bmat([[im_left,im_right]])
+        # im_pad   = im_pad.astype(np.uint8)
+        # if self.verbose:
+        #     print("Added padding")
+        # if self.showImages:
+        #     imshow(im_pad,'Padded Im')
+        im_pad = im
+        
+        # Run Contour for boggle tiles
+        contours, hierarchy = cv2.findContours(im_pad, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        center_points = []
+        good_contours = []
+        for con in contours:
+            area = cv2.contourArea(con)
+            perimeter = cv2.arcLength(con, True)
+            if perimeter == 0:
+                continue
+            circularity = 4*np.pi*(area/(perimeter*perimeter))
+            if area>3000 and (0.6 < circularity < 1.2):
+                x,y,w,h = cv2.boundingRect(con)
+                center_points.append([x+w/2, y+h/2])
+                good_contours.append(con)
+        center_points = np.asarray(center_points)
         if self.verbose:
-            print("Added padding")
-        if self.showImages:
-            imshow(im_pad,'Padded Im')
+            print("Num contours found: " + str(len(good_contours)))
 
         # Get center point for each letter
-        keypoints = self.find_blobs(im_pad) # blob detector
-        center_points = []
-        for i in range(len(keypoints)):
-            center_points.append(keypoints[i].pt)
-        center_points = np.asarray(center_points)
+        #keypoints = self.find_blobs(im_pad) # blob detector
+        #center_points = []
+        #for i in range(len(keypoints)):
+        #    center_points.append(keypoints[i].pt)
+        #center_points = np.asarray(center_points)
         if self.verbose:
             print("Found center points for each letter")
 
-        # Get distance between center points
-        dist = self.get_dist_between_letters(center_points)
-        if self.verbose:
-            print("Got avg distance between letters")
+        # If we have 16 contours just use contour information to
+        # grab letters, if not use the center_points from the contour finder
+        # and run the grid point check
+        if len(good_contours) == 16:
 
-        # Get rid of outlier points and fill in letter points we may have missed
-        temp = self.grid_point_check(center_points,dist,20,20,self.im)
-        center_points = temp
-        if self.verbose:
-            print("Grid point check done")
-   
-        # Order coordinates as as [1;2;....;16] so that the board looks like:
-        # ---------------        
-        # | 1  2  3  4  |
-        # | 5  6  7  8  |
-        # | 9  10 11 12 |
-        # | 13 14 15 16 |
-        # ---------------
-        y_weight = 5 
-        center_points_ordered = center_points[np.argsort((1+(center_points[:,1]/max(center_points[:,1])))*y_weight \
-            + center_points[:,0]/max(center_points[:,0]))] 
-        center_points = center_points_ordered
+            if self.verbose:
+                print("Using contours")
 
-        # Separate each individual letter
-        letters = []
-        boxLen  = self.distPercent * dist
-        boxedIm = self.im.copy()
-        for i in range(len(center_points)):
-            croppedIm = self.im[int(center_points[i][1]-boxLen/2.0):int(center_points[i][1]+boxLen/2.0), int(center_points[i][0]-boxLen/2.0):int(center_points[i][0]+boxLen/2.0)]
-            letters.append(croppedIm)
-            #if self.showImages:
-            cv2.rectangle(boxedIm,(int(center_points[i][0]-boxLen/2.0),int(center_points[i][1]-boxLen/2.0)),(int(center_points[i][0]+boxLen/2.0),int(center_points[i][1]+boxLen/2.0)),(0,255,0),2)
-        if self.showImages:
-            imshow(boxedIm,'boxed letters')
+            # Order points
+            y_weight = 5 
+            sorted_inds = np.argsort((1+(center_points[:,1]/max(center_points[:,1])))*y_weight \
+                + center_points[:,0]/max(center_points[:,0]))
+            sorted_good_contours = [good_contours[i] for i in sorted_inds]
+            good_contours = sorted_good_contours
+            center_points = center_points[sorted_inds]
+
+             # Separate each individual letter
+            letters = []
+            boxedIm = self.im.copy()
+            for con in good_contours:
+                x,y,w,h = cv2.boundingRect(con)
+                croppedIm = self.im[int(y):int(y+h), int(x):int(x+w)]
+                crop_px = 10
+                croppedIm = croppedIm[crop_px:croppedIm.shape[0]-crop_px, crop_px:croppedIm.shape[1]-crop_px]
+                letters.append(croppedIm)
+                #imshow(croppedIm,'a')
+                cv2.rectangle(boxedIm,(int(x),int(y)),(int(x+w),int(y+h)),(0,255,0),2)
+                cv2.drawContours(boxedIm,con,-1,(0,0,255),2)
+            if self.showImages:
+                imshow(boxedIm,'boxed letters')
+
+        else:
+
+            if self.verbose:
+                print("Using center points")
+
+            # Get distance between center points
+            dist = self.get_dist_between_letters(center_points)
+            if self.verbose:
+                print("Got avg distance between letters")
+
+            # Get rid of outlier points and fill in letter points we may have missed
+            temp = self.grid_point_check(center_points,dist,20,20,self.im)
+            center_points = temp
+            if self.verbose:
+                print("Grid point check done")
+    
+            # Order coordinates as as [1;2;....;16] so that the board looks like:
+            # ---------------        
+            # | 1  2  3  4  |
+            # | 5  6  7  8  |
+            # | 9  10 11 12 |
+            # | 13 14 15 16 |
+            # ---------------
+            y_weight = 5 
+            center_points_ordered = center_points[np.argsort((1+(center_points[:,1]/max(center_points[:,1])))*y_weight \
+                + center_points[:,0]/max(center_points[:,0]))] 
+            center_points = center_points_ordered
+
+            # Separate each individual letter
+            letters = []
+            boxLen  = self.distPercent * dist
+            boxedIm = self.im.copy()
+            for i in range(len(center_points)):
+                croppedIm = self.im[int(center_points[i][1]-boxLen/2.0):int(center_points[i][1]+boxLen/2.0), int(center_points[i][0]-boxLen/2.0):int(center_points[i][0]+boxLen/2.0)]
+                letters.append(croppedIm)
+                #if self.showImages:
+                con = good_contours[i]
+                cv2.drawContours(boxedIm,con,-1,(0,0,255),2)
+                cv2.rectangle(boxedIm,(int(center_points[i][0]-boxLen/2.0),int(center_points[i][1]-boxLen/2.0)),(int(center_points[i][0]+boxLen/2.0),int(center_points[i][1]+boxLen/2.0)),(0,255,0),2)
+            if self.showImages:
+                imshow(boxedIm,'boxed letters')
 
         # Show each cropped letter
         #if self.showImages:
@@ -118,7 +182,7 @@ class boggleSolver:
             thisLetter,confidence = self.predict_letter(letters[i])
             thisLetterVals.append(thisLetter[0])
             letterUsed = cv2.resize(letters[i],(40,40))
-            # imshow(letterUsed,thisLetter+': '+str(confidence))
+            #imshow(letterUsed,thisLetter+': '+str(confidence))
             (hh,ww) = letters[i].shape[:2]
             cent = (ww/2,hh/2)
             ang = 90
@@ -199,7 +263,7 @@ class boggleSolver:
             params.filterByCircularity = False
             params.filterByColor       = False # why doesn't this work
             params.filterByArea        = True
-            params.minArea = 600
+            params.minArea = 200
             params.minConvexity = 0.3
             detector = cv2.SimpleBlobDetector_create(params)
             keypoints = detector.detect(im_pad)
