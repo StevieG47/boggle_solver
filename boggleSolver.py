@@ -162,8 +162,9 @@ class boggleSolver:
                 croppedIm = self.im[int(center_points[i][1]-boxLen/2.0):int(center_points[i][1]+boxLen/2.0), int(center_points[i][0]-boxLen/2.0):int(center_points[i][0]+boxLen/2.0)]
                 letters.append(croppedIm)
                 #if self.showImages:
-                con = good_contours[i]
-                cv2.drawContours(boxedIm,con,-1,(0,0,255),2)
+                if i < len(good_contours):
+                    con = good_contours[i]
+                    cv2.drawContours(boxedIm,con,-1,(0,0,255),2)
                 cv2.rectangle(boxedIm,(int(center_points[i][0]-boxLen/2.0),int(center_points[i][1]-boxLen/2.0)),(int(center_points[i][0]+boxLen/2.0),int(center_points[i][1]+boxLen/2.0)),(0,255,0),2)
             if self.showImages:
                 imshow(boxedIm,'boxed letters')
