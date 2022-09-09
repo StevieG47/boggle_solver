@@ -30,7 +30,7 @@ class boggleSolver:
         imBlur = cv2.GaussianBlur(imBlur,(5,5),0)
 
         # Threshold non-white values
-        mask_rgb = cv2.inRange(imBlur, (100,100,100), (255,255,255))
+        mask_rgb = cv2.inRange(imBlur, (110,110,110), (255,255,255))
         mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_GRAY2BGR)
         imBlur = imBlur & mask_rgb
         if self.showImages:
@@ -70,21 +70,84 @@ class boggleSolver:
         
         # Run Contour for boggle tiles
         contours, hierarchy = cv2.findContours(im_pad, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-        center_points = []
+        #center_points = []
         good_contours = []
+        max_area = -1
         for con in contours:
             area = cv2.contourArea(con)
+            max_area = np.maximum(area,max_area)
             perimeter = cv2.arcLength(con, True)
             if perimeter == 0:
                 continue
             circularity = 4*np.pi*(area/(perimeter*perimeter))
-            if area>3000 and (0.6 < circularity < 1.2):
+            #if area > 1000:
+            #    print(area, " ", circularity)
+            if area>3000 and (0.3 < circularity < 1.7):
                 x,y,w,h = cv2.boundingRect(con)
-                center_points.append([x+w/2, y+h/2])
-                good_contours.append(con)
+                #center_points.append([x+w/2, y+h/2])
+                
+                # Prevent large contours from getting in
+                if w < im.shape[1]/3 and h < im.shape[0]/3:
+                  good_contours.append(con)
+        #center_points = np.asarray(center_points)
+
+        # If too contours too small image is probably zoomed out, try again with
+        # smaller threshold
+        if max_area < 3000 or len(good_contours)==0:
+            good_contours = []
+            for con in contours:
+                area = cv2.contourArea(con)
+                perimeter = cv2.arcLength(con, True)
+                if perimeter == 0:
+                    continue
+                circularity = 4*np.pi*(area/(perimeter*perimeter))
+                if area>1500 and (0.3 < circularity < 1.7):
+                    x,y,w,h = cv2.boundingRect(con)
+                    
+                    # Prevent large contours from getting in
+                    if w < im.shape[1]/3 and h < im.shape[0]/3:
+                      good_contours.append(con)
+
+        # Show good contours
+        contIm = self.im.copy()
+        if self.showImages:
+            for con in good_contours:
+                x,y,w,h = cv2.boundingRect(con)
+                cv2.rectangle(contIm,(int(x),int(y)),(int(x+w),int(y+h)),(0,255,0),2)
+                cv2.drawContours(contIm,con,-1,(0,0,255),2)
+            imshow(contIm,'good contours')
+
+        # Remove contours within other contours
+        final_conts = []
+        center_points = []
+        for c in range(len(good_contours)):
+            con = good_contours[c]
+            x,y,w,h = cv2.boundingRect(con)
+            con_cent = [x+w/2, y+h/2]
+            addCon = True
+            for gc in range(len(good_contours)):
+                isInside = False
+                if gc != c:
+                    # Check if inside
+                    con_check = good_contours[gc]
+                    xc,yc,wc,hc = cv2.boundingRect(con_check)
+                    isInside = x>xc and x+w<xc+wc and y>yc and y+h<yc+hc
+                    if isInside:
+                        addCon = False
+            if addCon:
+              final_conts.append(con)
+              center_points.append([x+w/2, y+h/2])
         center_points = np.asarray(center_points)
-        if self.verbose:
-            print("Num contours found: " + str(len(good_contours)))
+        good_contours = final_conts
+
+        # Show final contours
+        contIm = self.im.copy()
+        if self.showImages:
+            for con in good_contours:
+                x,y,w,h = cv2.boundingRect(con)
+                cv2.rectangle(contIm,(int(x),int(y)),(int(x+w),int(y+h)),(0,255,0),2)
+                cv2.drawContours(contIm,con,-1,(0,0,255),2)
+            imshow(contIm,'final contours')
 
         # Get center point for each letter
         #keypoints = self.find_blobs(im_pad) # blob detector
@@ -174,26 +237,36 @@ class boggleSolver:
         #    for i in range(len(letters)):
         #        imshow(letters[i],"letter")
         #        #print(center_points_ordered[i,:])
- 
+
+        # # Save out each letter
+        # import random 
+        # import string
+        # for thisLet in letters:
+        #     output_string = ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(5))
+        #     cv2.imwrite('letter_ims/'+output_string+'.png',thisLet)
+        # return 1
+
         #TODO: Put this into a function
         # Iterate through letters and classify them
         letter_vals = []
         for i in range(len(letters)):
             thisLetterVals = [] # Holds classified letter for each rotated version of this letter
+            #cv2.imwrite('testT.png',letters[i])
             thisLetter,confidence = self.predict_letter(letters[i])
             thisLetterVals.append(thisLetter[0])
-            letterUsed = cv2.resize(letters[i],(40,40))
+            letterUsed = cv2.resize(letters[i],(100,100))
             #imshow(letterUsed,thisLetter+': '+str(confidence))
-            (hh,ww) = letters[i].shape[:2]
+            (hh,ww) = letterUsed.shape[:2] #letters[i].shape[:2]
             cent = (ww/2,hh/2)
             ang = 90
             letter_guess = np.array([thisLetter])            # Array of predicted letters for all four rotations of current letter
             letter_guess_confidence = np.array([confidence]) # Array of predicted letter confidence corresponding to letter_guess
             for r in range(3):
                 M = cv2.getRotationMatrix2D(cent,ang,1)           # Get rotation matrix
-                rot_letter = cv2.warpAffine(letters[i],M,(hh,ww)) # Rotate letter image
+                rot_letter = cv2.warpAffine(letterUsed,M,(hh,ww)) # Rotate letter image
                 thisLetterRot,confidence2 = self.predict_letter(rot_letter) # Get letter prediction/confidence
                 ang += 90
+                #imshow(rot_letter,thisLetterRot+': '+str(confidence2))
 
                 # If we've never predicted this letter add it to our array
                 # If we have, add current confidence value to the exisitng corresponding letter confidence
@@ -302,9 +375,8 @@ class boggleSolver:
 
     def predict_letter(self,letter):
 
-        #labels = ['S270', 'D180', 'A90', 'D90', 'H90', 'S90', 'T270', 'T90', 'R', 'V270', 'V90', 'T', 'V', 'K', 'E180', 'V180', 'D270', 'E90', 'E', 'E270', 'R90', 'A180', 'A270', 'K270', 'Y270', 'O', 'Y', 'Y90', 'D', 'K180', 'H', 'T180', 'K90', 'R180', 'A', 'Y180', 'R270', 'S']
-        labels = ['S270', 'G270', 'Q90', 'D180', 'L', 'W', 'Z180', 'C90', 'A90', 'L180', 'J180', 'X', 'B180', 'C', 'Z', 'U270', 'D90', 'H90', 'S90', 'G90', 'B90', 'T270', 'P180', 'T90', 'F90', 'N90', 'L270', 'P', 'R', 'V270', 'V90', 'T', 'V', 'W180', 'K', 'W270', 'M90', 'X90', 'E180', 'V180', 'D270', 'E90', 'M270', 'E', 'E270', 'F', 'U90', 'R90', 'A180', 'P90', 'A270', 'K270', 'B270', 'M180', 'Y270', 'L90', 'W90', 'Q', 'M', 'F180', 'Q270', 'Q180', 'O', 'J90', 'C180', 'Y', 'U', 'B', 'Y90', 'D', 'U180', 'K180', 'J', 'H', 'N', 'C270', 'I90', 'Z270', 'T180', 'K90', 'R180', 'F270', 'A', 'P270', 'G', 'Z90', 'I', 'Y180', 'R270', 'S', 'J270', 'G180']
-        sz     = 40 # Size used in training
+        labels = ['R180', 'C', 'D270', 'W270', 'V90', 'I180', 'N', 'Z180', 'A', 'E', 'M270', 'L90', 'F90', 'J180', 'U180', 'J', 'I90', 'O270', 'O90', 'S', 'A90', 'X90', 'W180', 'A180', 'V270', 'G270', 'F', 'K270', 'N270', 'Z90', 'D90', 'B', 'V', 'A270', 'N90', 'E90', 'P90', 'L270', 'Y', 'R', 'J270', 'F180', 'X270', 'H90', 'H', 'Y180', 'O', 'O180', 'X180', 'N180', 'M90', 'Q180', 'G90', 'M180', 'K', 'H270', 'J90', 'U90', 'Z270', 'K180', 'R90', 'D180', 'Z', 'W', 'W90', 'L', 'H180', 'T', 'V180', 'E270', 'U', 'P180', 'S270', 'Y270', 'P', 'Q270', 'B90', 'M', 'K90', 'X', 'D', 'S180', 'B270', 'I270', 'C180', 'L180', 'Y90', 'C90', 'G180', 'G', 'R270', 'Q90', 'S90', 'C270', 'T90', 'E180', 'U270', 'T270', 'T180', 'Q', 'F270', 'P270', 'I', 'B180']
+        sz     = 100 # Size used in training
         #b,g,r  = cv2.split(letter)
         #letter = cv2.merge((r,g,b))         # Make it rgb (was bgr)
         letter = cv2.cvtColor(letter,cv2.COLOR_BGR2GRAY) # color to grayscale
@@ -314,19 +386,20 @@ class boggleSolver:
         letter = letter/255.0               # normalize
 
         # Push letter image through the network
-        im = letter.reshape(1,40,40,1)                        # add extra dimension for model input
+        im = letter.reshape(1,sz,sz,1)                        # add extra dimension for model input
         confidence = np.max(self.model.predict(im,verbose=0)) # get confidence as softmax output
         thisLetter = labels[self.model.predict_classes(im)[0]]
-        #print("Confidence: " , confidence)
-        #print("Letter: " , thisLetter)
-        #print("\n")
         thisLetter = thisLetter[0] # Get letter (ex: R180 -> R)
-        confidenceIndex = np.argsort(self.model.predict(im,verbose=0)[0])[::-1][0:3]
-        
-        #print("----------------------------")
-        #for ind in confidenceIndex:
-        #     print(labels[ind],":", self.model.predict(im,verbose=0)[0][ind])
-        #print("----------------------------")
+        if self.verbose:
+            print("----------------------------")
+            print("Confidence: " , confidence)
+            print("Letter: " , thisLetter)
+            print("\n")
+            confidenceIndex = np.argsort(self.model.predict(im,verbose=0)[0])[::-1][0:3]
+            
+            for ind in confidenceIndex:
+                print(labels[ind],":", self.model.predict(im,verbose=0)[0][ind])
+            print("----------------------------\n")
 
         return thisLetter, confidence
 

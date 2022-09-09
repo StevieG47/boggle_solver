@@ -19,7 +19,7 @@ st.markdown("---")
 
 # Load keras model
 global model
-model_file = 'models/all_binary_letters_75epoch.h5'
+model_file = 'models/augmented_letters_10epoch.h5' #all_binary_letters_75epoch.h5'
 model = load_model(model_file)
 
 # Load dictionary

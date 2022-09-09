@@ -15,11 +15,11 @@ im = cv2.imread(im_file)
 
 # Load keras model
 global model
-model_file = 'models/all_binary_letters_75epoch.h5'
+model_file = 'models/augmented_letters_10epoch.h5' #all_binary_letters_75epoch.h5'
 model = load_model(model_file)
 
 # Run boggle solver
-bs = boggleSolver(model,showImages=True,verbose=True)
+bs = boggleSolver(model,showImages=False,verbose=False)
 output_im, letters_out = bs.process_image(im)
 
 # Run boggle board solver
