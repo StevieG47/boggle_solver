@@ -13,7 +13,9 @@ import pandas as pd
 # Page title/headers
 st.set_page_config(page_title = "Boggle Solver")
 st.title("Boggle Solver")
-st.subheader("Take a top down picture of the board")
+st.subheader("Take a top down image of the board")
+st.subheader("'Browse Files' -> Select Image")
+st.subheader("'Get Words'")
 button_example = st.button("Run Example")
 st.markdown("---")
 
