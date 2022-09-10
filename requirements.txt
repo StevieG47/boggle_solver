@@ -4,3 +4,4 @@ opencv-python-headless
 Pillow
 tensorflow==2.5.0
 pandas
+gdown

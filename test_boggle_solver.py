@@ -8,6 +8,7 @@ import time
 import readline
 from Trie import Trie
 from boggle_helper import *
+import os
 
 # Load test image
 im_file = 'images/example.jpg'
@@ -15,7 +16,12 @@ im = cv2.imread(im_file)
 
 # Load keras model
 global model
-model_file = 'models/augmented_letters_10epoch.h5' #all_binary_letters_75epoch.h5'
+model_file = './augmented_letters_10epoch.h5' #all_binary_letters_75epoch.h5'
+if not os.path.exists(model_file):
+    print("Downloading model file...")
+    model_url = 'https://drive.google.com/file/d/16SdU9YfFez9IxsOLEwLB295NOOUsL156/view?usp=sharingv'
+    os.system('gdown --id 16SdU9YfFez9IxsOLEwLB295NOOUsL156')
+    print("Done")
 model = load_model(model_file)
 
 # Run boggle solver
